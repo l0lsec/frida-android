@@ -13,6 +13,26 @@ CYAN=$'\033[0;36m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
 
+HAS_ROOT=""
+
+detect_root() {
+    if adb shell "su -c 'id'" 2>/dev/null | grep -q 'uid=0'; then
+        HAS_ROOT=1
+    else
+        HAS_ROOT=""
+        echo -e "${YELLOW}Warning: device does not have root (su) — running in non-root mode${RESET}" >&2
+        echo -e "${YELLOW}         frida-server will only see debuggable apps${RESET}" >&2
+    fi
+}
+
+device_shell() {
+    if [[ -n "$HAS_ROOT" ]]; then
+        adb shell "su -c '$*'"
+    else
+        adb shell "$*"
+    fi
+}
+
 usage() {
     cat <<EOF
 ${BOLD}Frida Android Server Manager${RESET}
@@ -36,6 +56,9 @@ Environment:
   FRIDA_PORT       Listen port (default: 27042)
   FRIDA_REMOTE     On-device path (default: /data/local/tmp/frida-server)
   FRIDA_CACHE_DIR  Host cache dir (default: \$HOME/.cache/frida-android-server)
+
+Root access is auto-detected. On non-rooted devices frida-server runs as the
+shell user and can only instrument debuggable apps.
 EOF
 }
 
@@ -128,7 +151,7 @@ ensure_binary() {
 
 server_running_pid() {
     local pid
-    pid=$(adb shell "su -c 'pidof frida-server'" 2>/dev/null | tr -d '\r' | awk '{print $1}')
+    pid=$(device_shell "pidof frida-server" 2>/dev/null | tr -d '\r' | awk '{print $1}')
     echo "$pid"
 }
 
@@ -136,12 +159,12 @@ push_binary() {
     local local_path="$1"
     echo -e "${CYAN}Pushing $(basename "$local_path") -> ${FRIDA_REMOTE}${RESET}"
     adb push "$local_path" "$FRIDA_REMOTE" >/dev/null
-    adb shell "su -c 'chmod 755 ${FRIDA_REMOTE}'"
+    device_shell "chmod 755 ${FRIDA_REMOTE}"
 }
 
 launch_server() {
     echo -e "${CYAN}Launching frida-server on port ${FRIDA_PORT}...${RESET}"
-    adb shell "su -c 'nohup ${FRIDA_REMOTE} -l 0.0.0.0:${FRIDA_PORT} >/dev/null 2>&1 &'" >/dev/null || true
+    device_shell "nohup ${FRIDA_REMOTE} -l 0.0.0.0:${FRIDA_PORT} >/dev/null 2>&1 &" >/dev/null || true
     sleep 1
     local pid
     pid=$(server_running_pid)
@@ -183,7 +206,7 @@ frida_start() {
     fi
 
     local installed=""
-    installed=$(adb shell "su -c '[ -x ${FRIDA_REMOTE} ] && ${FRIDA_REMOTE} --version'" 2>/dev/null | tr -d '\r\n' || true)
+    installed=$(device_shell "[ -x ${FRIDA_REMOTE} ] && ${FRIDA_REMOTE} --version" 2>/dev/null | tr -d '\r\n' || true)
     local desired
     desired=$(resolve_version)
 
@@ -206,7 +229,7 @@ frida_stop() {
     local pid
     pid=$(server_running_pid)
     if [[ -n "$pid" ]]; then
-        adb shell "su -c 'kill ${pid}'" 2>/dev/null || true
+        device_shell "kill ${pid}" 2>/dev/null || true
     fi
     sleep 1
     local pid
@@ -227,7 +250,7 @@ frida_restart() {
 frida_uninstall() {
     frida_stop || true
     echo -e "${CYAN}Removing ${FRIDA_REMOTE}...${RESET}"
-    adb shell "su -c 'rm -f ${FRIDA_REMOTE}'" 2>/dev/null || true
+    device_shell "rm -f ${FRIDA_REMOTE}" 2>/dev/null || true
     local exists
     exists=$(adb shell "[ -e ${FRIDA_REMOTE} ] && echo yes || echo no" 2>/dev/null | tr -d '\r\n')
     if [[ "$exists" == "no" ]]; then
@@ -256,7 +279,7 @@ frida_status() {
     echo -e "${BOLD}Host frida:${RESET}    ${host_v}"
 
     local device_v
-    device_v=$(adb shell "su -c '[ -x ${FRIDA_REMOTE} ] && ${FRIDA_REMOTE} --version'" 2>/dev/null | tr -d '\r\n' || true)
+    device_v=$(device_shell "[ -x ${FRIDA_REMOTE} ] && ${FRIDA_REMOTE} --version" 2>/dev/null | tr -d '\r\n' || true)
     if [[ -n "$device_v" ]]; then
         echo -e "${BOLD}Device server:${RESET} ${device_v} at ${FRIDA_REMOTE}"
     else
@@ -276,7 +299,7 @@ frida_status() {
     fi
 
     local listen
-    listen=$(adb shell "su -c 'netstat -tln 2>/dev/null | grep :${FRIDA_PORT}'" 2>/dev/null | tr -d '\r' | head -1 || true)
+    listen=$(device_shell "netstat -tln 2>/dev/null | grep :${FRIDA_PORT}" 2>/dev/null | tr -d '\r' | head -1 || true)
     if [[ -n "$listen" ]]; then
         echo -e "${BOLD}Listening:${RESET}     ${GREEN}port ${FRIDA_PORT}${RESET}"
     else
@@ -302,6 +325,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 check_adb
+detect_root
 
 case "$1" in
     start|on|up)        frida_start ;;

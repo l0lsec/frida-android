@@ -1,8 +1,8 @@
 # frida-android
 
-Manage `frida-server` on a rooted Android device/emulator via ADB.
+Manage `frida-server` on an Android device/emulator via ADB.
 
-Automatically downloads the `frida-server` build that matches the host's installed `frida` CLI version, pushes it to the device, and starts it as root. Also exposes status, stop, restart, and uninstall commands.
+Automatically downloads the `frida-server` build that matches the host's installed `frida` CLI version, pushes it to the device, and starts it. Root access is auto-detected: on rooted devices frida-server runs as root; on non-rooted devices it runs as the shell user and can only instrument debuggable apps.
 
 ## Usage
 
@@ -31,10 +31,18 @@ Automatically downloads the `frida-server` build that matches the host's install
 ## Requirements
 
 - `adb` in PATH with a connected device/emulator
-- Rooted Android device with `su` available (Magisk, userdebug, etc.)
 - `curl` and `xz` on the host
 - `python3` on the host (only needed when falling back to GitHub for the latest version)
 - `frida` / `frida-tools` on the host (recommended) so versions match automatically and `status` can verify connectivity
+- Root (`su`) on the device is recommended (Magisk, userdebug, etc.) but **not required** — the script auto-detects root and falls back to non-root mode
+
+### Non-root limitations
+
+When running without root, frida-server executes as the `shell` user. This means:
+
+- Only **debuggable** apps (`android:debuggable="true"` or debug builds) can be instrumented
+- System services and production apps cannot be attached to
+- Some status checks (e.g. `netstat`) may return less information
 
 ## Version resolution
 
