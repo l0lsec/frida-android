@@ -228,12 +228,22 @@ frida_stop() {
     echo -e "${CYAN}Stopping frida-server...${RESET}"
     local pid
     pid=$(server_running_pid)
-    if [[ -n "$pid" ]]; then
-        device_shell "kill ${pid}" 2>/dev/null || true
+    if [[ -z "$pid" ]]; then
+        echo -e "${GREEN}frida-server is not running${RESET}"
+        return 0
     fi
+
+    device_shell "kill ${pid}" 2>/dev/null || true
     sleep 1
-    local pid
+
     pid=$(server_running_pid)
+    if [[ -n "$pid" ]]; then
+        echo -e "${YELLOW}SIGTERM ignored, sending SIGKILL...${RESET}"
+        device_shell "kill -9 ${pid}" 2>/dev/null || true
+        sleep 1
+        pid=$(server_running_pid)
+    fi
+
     if [[ -z "$pid" ]]; then
         echo -e "${GREEN}frida-server stopped${RESET}"
     else
