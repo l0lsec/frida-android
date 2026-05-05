@@ -2,7 +2,7 @@
 set -euo pipefail
 
 FRIDA_PORT="${FRIDA_PORT:-27042}"
-FRIDA_REMOTE="${FRIDA_REMOTE:-/data/local/tmp/frida-server}"
+FRIDA_REMOTE="${FRIDA_REMOTE:-/data/local/tmp/rida-server}"
 FRIDA_VERSION="${FRIDA_VERSION:-}"
 CACHE_DIR="${FRIDA_CACHE_DIR:-$HOME/.cache/frida-android-server}"
 
@@ -54,7 +54,7 @@ Environment:
   FRIDA_VERSION    Override version (default: host \`frida --version\`,
                      fallback to latest GitHub release)
   FRIDA_PORT       Listen port (default: 27042)
-  FRIDA_REMOTE     On-device path (default: /data/local/tmp/frida-server)
+  FRIDA_REMOTE     On-device path (default: /data/local/tmp/rida-server)
   FRIDA_CACHE_DIR  Host cache dir (default: \$HOME/.cache/frida-android-server)
 
 Root access is auto-detected. On non-rooted devices frida-server runs as the
@@ -151,7 +151,7 @@ ensure_binary() {
 
 server_running_pid() {
     local pid
-    pid=$(device_shell "pidof frida-server" 2>/dev/null | tr -d '\r' | awk '{print $1}')
+    pid=$(device_shell "pidof rida-server" 2>/dev/null | tr -d '\r' | awk '{print $1}')
     echo "$pid"
 }
 
