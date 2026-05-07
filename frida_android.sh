@@ -150,8 +150,12 @@ ensure_binary() {
 }
 
 server_running_pid() {
-    local pid
-    pid=$(device_shell "pidof rida-server" 2>/dev/null | tr -d '\r' | awk '{print $1}')
+    local pid bname
+    bname=$(basename "$FRIDA_REMOTE")
+    pid=$(device_shell "pidof ${bname}" 2>/dev/null | tr -d '\r' | awk '{print $1}') || true
+    if [[ -z "$pid" && "$bname" != "frida-server" ]]; then
+        pid=$(device_shell "pidof frida-server" 2>/dev/null | tr -d '\r' | awk '{print $1}') || true
+    fi
     echo "$pid"
 }
 
@@ -164,14 +168,26 @@ push_binary() {
 
 launch_server() {
     echo -e "${CYAN}Launching frida-server on port ${FRIDA_PORT}...${RESET}"
+
+    # Kill any leftover frida-server process (original name) that may hold the port
+    local stale
+    stale=$(device_shell "pidof frida-server" 2>/dev/null | tr -d '\r' | awk '{print $1}') || true
+    if [[ -n "$stale" ]]; then
+        echo -e "${YELLOW}Killing stale frida-server process (pid ${stale})${RESET}"
+        device_shell "kill ${stale}" 2>/dev/null || true
+        sleep 1
+    fi
+
     device_shell "nohup ${FRIDA_REMOTE} -l 0.0.0.0:${FRIDA_PORT} >/dev/null 2>&1 &" >/dev/null || true
-    sleep 1
+    sleep 2
     local pid
     pid=$(server_running_pid)
     if [[ -n "$pid" ]]; then
         echo -e "${GREEN}frida-server running (pid ${pid}) on port ${FRIDA_PORT}${RESET}"
     else
         echo -e "${RED}Error: frida-server failed to start${RESET}" >&2
+        echo -e "${RED}Attempting diagnostic launch...${RESET}" >&2
+        device_shell "${FRIDA_REMOTE} -l 0.0.0.0:${FRIDA_PORT} &" 2>&1 | head -5 >&2 || true
         exit 1
     fi
 }
